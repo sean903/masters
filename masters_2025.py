@@ -3,8 +3,11 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import json
+import re
+from fractions import Fraction
+import unicodedata
+API_KEY = st.secrets["odds_api_key"]
 
-# ---------- Shared data setup ----------
 @st.cache_data(ttl=20)
 def get_leaderboard():
     URL = "https://www.pgatour.com/leaderboard"
@@ -33,6 +36,47 @@ def get_leaderboard():
 
     leaderboard['CurrentScore'] = leaderboard['Current Score'].apply(convert_to_float)
     return leaderboard
+
+
+def get_odds():
+    url = "https://api.the-odds-api.com/v4/sports/golf_masters_tournament_winner/odds"
+    params = {
+        "apiKey": API_KEY,
+        "regions": "us",
+        "markets": "outrights",
+        "oddsFormat": "decimal",
+        "dateFormat": "iso"
+    }
+
+    r = requests.get(url, params=params)
+    if r.status_code != 200:
+        st.warning("Could not load odds data.")
+        return {}
+
+    odds_data = r.json()
+    odds_map = {}
+
+    for event in odds_data:
+        for bookmaker in event.get("bookmakers", []):
+            for market in bookmaker.get("markets", []):
+                if market["key"] == "outrights":
+                    for outcome in market["outcomes"]:
+                        name = outcome["name"]
+                        surname = normalize_name(name.split()[-1])
+                        odds_map[surname] = outcome["price"]
+    return odds_map
+
+
+def decimal_to_fractional(decimal_odds):
+    if pd.isna(decimal_odds):
+        return None
+    fractional = Fraction(decimal_odds - 1).limit_denominator()
+    return f"{fractional.numerator}/{fractional.denominator}"
+
+
+def normalize_name(name):
+    # Remove accents and convert to plain ASCII
+    return unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode('utf-8').lower()
 
 # Your players dictionary (keep this global so it's reusable)
 dictionary = {
@@ -88,7 +132,6 @@ df_main = pd.DataFrame(rows, columns=columns).sort_values(by='Avg Score').reset_
 st.subheader("🏆 Leaderboard (Average of Top 2 Picks)")
 st.dataframe(df_main, use_container_width=True)
 
-# === Outright Winner Table ===
 rows = []
 for person, picks in dictionary.items():
     for pick in picks:
@@ -96,6 +139,23 @@ for person, picks in dictionary.items():
         score = row.iloc[0]['CurrentScore'] if not row.empty else 100.0
         rows.append([person, pick, score])
 
-df_outright = pd.DataFrame(rows, columns=["Person", "Player", "Score"]).sort_values(by="Score").reset_index(drop=True)
-st.subheader("🎯 Outright Winner Tracker")
+df_outright = pd.DataFrame(rows, columns=["Person", "Player", "Score"])
+
+# Get odds
+odds_map = get_odds()
+
+# Match by surname
+df_outright["Surname"] = df_outright["Player"].apply(
+    lambda x: normalize_name(re.sub(r"[^\w\s]", "", x.split()[-1]))
+)
+df_outright["Odds"] = df_outright["Surname"].map(odds_map)
+df_outright["Fractional Odds"] = df_outright["Odds"].apply(decimal_to_fractional)
+
+
+# Clean up
+df_outright = df_outright.drop(columns=["Surname"])
+df_outright = df_outright.sort_values(by="Score").reset_index(drop=True)
+
+# Display
+st.subheader("🎯 Outright Winner Tracker (with Betting Odds)")
 st.dataframe(df_outright, use_container_width=True)
