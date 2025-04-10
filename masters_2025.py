@@ -93,7 +93,7 @@ def get_leaderboard():
 st.set_page_config(page_title="Masters 2025 Leaderboard", layout="wide")
 
 st.title("🏌️ Masters 2025 - Friends Leaderboard")
-st.markdown("Updates every 60 seconds.")
+st.markdown("Updates every 60 seconds (may need to refresh page)")
 
 df = get_leaderboard()
-st.dataframe(df, use_container_width=True)
+st.dataframe(df, use_container_width=True, height=600)
