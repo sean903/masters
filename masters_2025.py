@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import json
 
 
-@st.cache_data(ttl=60)  # Caches data for 60 seconds to auto-refresh
+@st.cache_data(ttl=20)  # Caches data for 60 seconds to auto-refresh
 def get_leaderboard():
     URL = "https://www.pgatour.com/leaderboard"
     r = requests.get(URL, verify=False)
