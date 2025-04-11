@@ -70,7 +70,7 @@ def get_odds():
 def decimal_to_fractional(decimal_odds):
     if pd.isna(decimal_odds):
         return None
-    fractional = Fraction(decimal_odds - 1).limit_denominator()
+    fractional = Fraction(decimal_odds).limit_denominator()
     return f"{fractional.numerator}/{fractional.denominator}"
 
 
